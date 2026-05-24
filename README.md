@@ -1,4 +1,3 @@
-```md
 # PROJECT AKHIR PRAKTIKUM SISTEM MIKROKONTROLER
 
 ## Identitas Kelompok
