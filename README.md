@@ -1,6 +1,6 @@
 # PROJECT AKHIR PRAKTIKUM SISTEM MIKROKONTROLER
 
-## Identitas Kelompok
+## Identitas Kelompok :
 
 | Keterangan | Isi |
 |---|---|
@@ -10,7 +10,7 @@
 
 ---
 
-## Identitas Anggota Kelompok
+## Identitas Anggota Kelompok :
 
 | No | Nama Anggota | NIM |
 |---|---|---|
