@@ -1,11 +1,6 @@
 #include <Arduino.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
 #include <WiFi.h>
 #include <esp_now.h>
-
-// ================= LCD 16x2 =================
-LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // ================= PIN ESP32 UTAMA =================
 const int pinPot = 34;
@@ -46,6 +41,10 @@ QueueHandle_t queueCommand;
 // ================= PARAMETER AIR =================
 int batasKeruh = 2000;
 
+// Batas ultrasonik
+const int BATAS_MULAI_ISI_CM = 20; // jika jarak > 20 cm, mulai isi
+const int BATAS_STOP_ISI_CM  = 15; // jika jarak <= 19 cm, stop isi
+
 // Data sensor global
 volatile int nilaiADC = 0;
 volatile int jarak = 999;
@@ -68,9 +67,9 @@ unsigned long waktuMulaiJedaIsi = 0;
 const unsigned long JEDA_SEBELUM_ISI_MS = 2000;
 bool sedangJedaIsi = false;
 
-// ================= LCD UPDATE =================
-unsigned long waktuUpdateLCD = 0;
-const unsigned long INTERVAL_LCD_MS = 500;
+// ================= SERIAL MONITOR UPDATE =================
+unsigned long waktuUpdateSerial = 0;
+const unsigned long INTERVAL_SERIAL_MS = 500;
 
 // ================= CALLBACK ESP-NOW =================
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -141,6 +140,36 @@ int bacaJarak() {
   return (int)hasil;
 }
 
+// ================= FUNGSI STATUS TEKS =================
+String getStatusText() {
+  if (modeManual == 1) {
+    return "MANUAL:BUANG";
+  } 
+  else if (modeManual == 2) {
+    return "MANUAL:ISI";
+  } 
+  else if (modeManual == 3) {
+    return "MANUAL:OFF";
+  } 
+  else {
+    if (statusAir == 0) {
+      return "AUTO:NORMAL";
+    } 
+    else if (statusAir == 1) {
+      if (sedangJedaIsi) {
+        return "AUTO:JEDA ISI";
+      } else {
+        return "AUTO:KURAS";
+      }
+    } 
+    else if (statusAir == 2) {
+      return "AUTO:ISI";
+    }
+  }
+
+  return "UNKNOWN";
+}
+
 // ================= MODE AUTO =================
 void jalankanModeAuto(int adcSekarang, int jarakSekarang) {
   // 1. NORMAL -> KURAS
@@ -149,15 +178,19 @@ void jalankanModeAuto(int adcSekarang, int jarakSekarang) {
     sedangJedaIsi = false;
 
     pompaBuangOn();
+
+    Serial.println("AUTO: Air keruh, pompa buang ON");
   }
 
   // 2. KURAS -> JEDA 2 DETIK -> ISI
   if (statusAir == 1) {
-    if (jarakSekarang != 999 && jarakSekarang > 20 && sedangJedaIsi == false) {
+    if (jarakSekarang != 999 && jarakSekarang > BATAS_MULAI_ISI_CM && sedangJedaIsi == false) {
       semuaPompaOff();
 
       waktuMulaiJedaIsi = millis();
       sedangJedaIsi = true;
+
+      Serial.println("AUTO: Air sudah rendah, pompa buang OFF, jeda sebelum isi");
     }
 
     if (sedangJedaIsi == true && millis() - waktuMulaiJedaIsi >= JEDA_SEBELUM_ISI_MS) {
@@ -165,16 +198,20 @@ void jalankanModeAuto(int adcSekarang, int jarakSekarang) {
       sedangJedaIsi = false;
 
       pompaIsiOn();
+
+      Serial.println("AUTO: Jeda selesai, pompa isi ON");
     }
   }
 
   // 3. ISI -> NORMAL
   if (statusAir == 2) {
-    if (jarakSekarang != 999 && jarakSekarang <= 8) {
+    if (jarakSekarang != 999 && jarakSekarang <= BATAS_STOP_ISI_CM) {
       statusAir = 0;
       sedangJedaIsi = false;
 
       semuaPompaOff();
+
+      Serial.println("AUTO: Air cukup, semua pompa OFF, kembali NORMAL");
     }
   }
 }
@@ -192,47 +229,30 @@ void jalankanModeManual() {
   }
 }
 
-// ================= UPDATE LCD =================
-void updateLCD(int adcSekarang, int jarakSekarang) {
-  if (millis() - waktuUpdateLCD >= INTERVAL_LCD_MS) {
-    waktuUpdateLCD = millis();
+// ================= UPDATE SERIAL MONITOR =================
+void updateSerialMonitor(int adcSekarang, int jarakSekarang) {
+  if (millis() - waktuUpdateSerial >= INTERVAL_SERIAL_MS) {
+    waktuUpdateSerial = millis();
 
-    lcd.clear();
+    Serial.print("ADC: ");
+    Serial.print(adcSekarang);
 
-    lcd.setCursor(0, 0);
-    lcd.print("Air:");
-    lcd.print(jarakSekarang);
-    lcd.print("cm ");
-
-    lcd.print("A:");
-    lcd.print(adcSekarang);
-
-    lcd.setCursor(0, 1);
-
-    if (modeManual == 1) {
-      lcd.print("MANUAL:BUANG   ");
-    } 
-    else if (modeManual == 2) {
-      lcd.print("MANUAL:ISI     ");
-    } 
-    else if (modeManual == 3) {
-      lcd.print("MANUAL:OFF     ");
-    } 
-    else {
-      if (statusAir == 0) {
-        lcd.print("AUTO:NORMAL    ");
-      } 
-      else if (statusAir == 1) {
-        if (sedangJedaIsi) {
-          lcd.print("AUTO:JEDA ISI  ");
-        } else {
-          lcd.print("AUTO:KURAS     ");
-        }
-      } 
-      else if (statusAir == 2) {
-        lcd.print("AUTO:ISI       ");
-      }
+    Serial.print(" | Jarak: ");
+    if (jarakSekarang == 999) {
+      Serial.print("TIMEOUT");
+    } else {
+      Serial.print(jarakSekarang);
+      Serial.print(" cm");
     }
+
+    Serial.print(" | Status: ");
+    Serial.print(getStatusText());
+
+    Serial.print(" | Relay Buang: ");
+    Serial.print(digitalRead(relayBuang) == POMPA_ON ? "ON" : "OFF");
+
+    Serial.print(" | Relay Isi: ");
+    Serial.println(digitalRead(relayIsi) == POMPA_ON ? "ON" : "OFF");
   }
 }
 
@@ -289,8 +309,8 @@ void TaskKontrolAir(void *pvParameters) {
           sedangJedaIsi = false;
           semuaPompaOff();
 
-          Serial.print("Mode sekarang: ");
-          Serial.println(modeManual);
+          Serial.print("Mode manual berubah ke: ");
+          Serial.println(getStatusText());
         }
       }
     }
@@ -304,7 +324,7 @@ void TaskKontrolAir(void *pvParameters) {
       jalankanModeManual();
     }
 
-    updateLCD(adcSekarang, jarakSekarang);
+    updateSerialMonitor(adcSekarang, jarakSekarang);
 
     vTaskDelay(pdMS_TO_TICKS(100));
   }
@@ -319,6 +339,7 @@ void setup() {
   WiFi.disconnect();
 
   Serial.println();
+  Serial.println("ESP UTAMA RTOS TANPA LCD");
   Serial.print("MAC ESP UTAMA: ");
   Serial.println(WiFi.macAddress());
 
@@ -335,19 +356,6 @@ void setup() {
   }
 
   esp_now_register_recv_cb(onDataRecv);
-
-  // ================= I2C LCD =================
-  Wire.begin(21, 22);
-  Wire.setClock(100000);
-
-  lcd.init();
-  lcd.backlight();
-  lcd.clear();
-
-  lcd.setCursor(0, 0);
-  lcd.print("ESP UTAMA RTOS");
-  lcd.setCursor(0, 1);
-  lcd.print("ESP-NOW RX");
 
   // ================= SETUP LED =================
   pinMode(ledBuang, OUTPUT);
@@ -369,8 +377,7 @@ void setup() {
   pinMode(pinEcho, INPUT);
   digitalWrite(pinTrig, LOW);
 
-  delay(1500);
-  lcd.clear();
+  delay(1000);
 
   // ================= BUAT TASK RTOS =================
 
