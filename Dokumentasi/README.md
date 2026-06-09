@@ -7,6 +7,10 @@
 
 ---
 
+## Proses Perakitan 
+<img width="300" alt="img1" src="../Dokumentasi/rakit 1.jpeg"><br>
+<img width="300" alt="img1" src="../Dokumentasi/rakit 2.jpeg"><br>
+
 ## Skema Akhir
 
 ### ESP32 Utama
