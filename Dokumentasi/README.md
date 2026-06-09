@@ -8,8 +8,11 @@
 ---
 
 ## Proses Perakitan 
-<img width="300" alt="img1" src="../Dokumentasi/rakit 1.jpeg"><br>
-<img width="300" alt="img1" src="../Dokumentasi/rakit 2.jpeg"><br>
+<img width="500" alt="img1" src="../Dokumentasi/rakit 1.jpeg"><br>
+<img width="500" alt="img1" src="../Dokumentasi/rakit 2.jpeg"><br>
+<img width="500" alt="img1" src="../Dokumentasi/rakit 3.jpeg"><br>
+<img width="500" alt="img1" src="../Dokumentasi/rakit 4.jpeg"><br>
+<img width="500" alt="img1" src="../Dokumentasi/rakit 5.jpeg">
 
 ## Skema Akhir
 
